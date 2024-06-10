@@ -30,7 +30,7 @@ class App:
             header_dict[key] = value
         return header_dict
 
-    async def get_request_body(self, request, charset, content_length):
+    async def get_request_body(self, request, content_length, charset='utf-8'):
         return (await request.read(content_length)).decode(charset)
 
     def get_request_line(self, request):
@@ -40,7 +40,7 @@ class App:
 
         request_line = await self.read_request_line(request)
         request_header = await self.get_request_headers(request)
-        request_body = await self.get_request_body(request, 'utf-8', int(request_header.get('Content-Length', 0)))
+        request_body = await self.get_request_body(request, int(request_header.get('Content-Length', 0)))
         print(f'request_line {request_line}')
         print(f'request_header {request_header}')
         print(f'request_body {request_body}')

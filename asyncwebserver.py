@@ -9,32 +9,41 @@ class App:
         self.port = port
         self.handlers = []
 
-    async def dispatch(self, request, response):
-        request_line = (await request.readline()).decode('ascii').strip('\r\n')
+    async def read_request_line(self, request):
+        return (await request.readline()).decode('ascii').strip('\r\n')
+
+    def parse_request_line(self, request_line):
         method, path, version = request_line.split(' ')
+        return method, path, version
 
-        print(f'method: {method}, path: {path}, version: {version}')
+    def parse_header_line(self, header_line):
+        return header_line.split(': ', 1)
 
+    async def get_request_headers(self, request):
         header_dict = {}
         while True:
-            header_line = (await request.readline()).decode('ascii').strip('\r\n')
-            print(f'line: {header_line}')
+            header_line = await self.read_request_line(request)
             if header_line == '':
                 break
-            header_dict.update([header_line.split(': ', 1)])
+            key, value = self.parse_header_line(header_line)
+            print(f'key: {key}, value: {value}')
+            header_dict[key] = value
+        return header_dict
 
-        charset = 'utf-8'
-        if 'Content-Type' in header_dict:
-            content_type = header_dict['Content-Type']
-            if 'charset=' in content_type:
-                charset = content_type.split('charset=')[1]
+    async def get_request_body(self, request, charset, content_length):
+        return (await request.read(content_length)).decode(charset)
 
-        if 'Content-Length' in header_dict:
-            content_length = int(header_dict['Content-Length'])
-            body = (await request.read(content_length)).decode(charset)
-            print(f'body: {body}')
+    def get_request_line(self, request):
+        method, path, version = self.parse_request_line(self.read_request_line(request))
 
-        print(f'headers: {header_dict}')
+    async def dispatch(self, request, response):
+
+        request_line = await self.read_request_line(request)
+        request_header = await self.get_request_headers(request)
+        request_body = await self.get_request_body(request, 'utf-8', int(request_header.get('Content-Length', 0)))
+        print(f'request_line {request_line}')
+        print(f'request_header {request_header}')
+        print(f'request_body {request_body}')
 
         response.write(b'HTTP/1.0 404 Not Found\r\n\r\nNot Found')
         response.close()

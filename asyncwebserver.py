@@ -1,8 +1,6 @@
 import asyncio
-# import uasyncio as asyncio
+import machine
 
-
-# https://developer.mozilla.org/ja/docs/Web/HTTP/Messages
 
 class WebServer:
     def __init__(self, host='0.0.0.0', port=80, handlers={}):
@@ -11,7 +9,7 @@ class WebServer:
         self.handlers = handlers
 
     def default_handler(self, method, path, request_header, query_dict={}, request_body=None):
-        pass
+        return b'HTTP/1.0 404 Not Found\r\n\r\nNot Found'
 
     async def read_request(self, request):
         return (await request.readline()).decode('ascii').strip('\r\n')
@@ -27,7 +25,6 @@ class WebServer:
         header_dict = {}
         for header_line in header_list:
             key, value = self.parse_header_line(header_line)
-            print(f'key: {key}, value: {value}')
             header_dict.update({key: value})
         return header_dict
 
@@ -52,33 +49,48 @@ class WebServer:
     async def read_request_body(self, request, content_length, charset='utf-8'):
         return (await request.read(content_length)).decode(charset)
 
-    async def dispatch(self, request, response):
-        headers = await self.read_header(request)
+    async def dispatch(self, request_io, response_io):
+        headers = await self.read_header(request_io)
         method, path, version = self.parse_request_line(headers.pop(0))
         request_header = self.parse_request_header_to_dict(headers)
         path, query_dict = self.parse_request_path(path)
 
-        print(f'request_line {method} {path} {version}')
-        print(f'request_header {request_header}')
-
         if 'Content-Length' in request_header and int(request_header.get('Content-Length', 0)) > 0:
-            request_body = await self.read_request_body(request, int(request_header.get('Content-Length', 0)))
-            print(f'request_body {request_body}')
+            request_body = await self.read_request_body(request_io, int(request_header.get('Content-Length', 0)))
+        else:
+            request_body = None
 
         handler = self.handlers.get(path, self.default_handler)
         response = handler(method, path, request_header, query_dict=query_dict, request_body=request_body)
 
-        response.write(b'HTTP/1.0 404 Not Found\r\n\r\nNot Found')
-        response.close()
-        await response.wait_closed()
+        response_io.write(response)
+        response_io.close()
+        await response_io.wait_closed()
 
     async def serve(self):
         await asyncio.start_server(self.dispatch, self.host, self.port)
 
-web_server = WebServer(host='0.0.0.0', port=1080)
+
 def main():
+    led = machine.Pin('LED', machine.Pin.OUT)
+    def led_on():
+        led.value(1)
+    
+    def led_off():
+        led.value(0)
+
+    def led_on_handler(method, path, request_header, query_dict={}, request_body=None):
+        led_on()
+        return b'HTTP/1.0 200 OK\r\n\r\nLED ON'
+
+    def led_off_handler(method, path, request_header, query_dict={}, request_body=None):
+        led_off()
+        return b'HTTP/1.0 200 OK\r\n\r\nLED OFF'
+
+    handlers = {'/led_on': led_on_handler, '/led_off': led_off_handler}
+
+    web_server = WebServer(host='0.0.0.0', port=2080, handlers=handlers)
     loop = asyncio.new_event_loop()
-    # loop.set_debug(True)
     loop.create_task(web_server.serve())
     loop.run_forever()
 

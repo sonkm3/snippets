@@ -1,0 +1,19 @@
+<html>
+    <body>
+        <script src="index.js"></script>
+        <h1>Web Bluetooth Example</h1>
+        <button onclick="choose_device()">choose device</button>
+        <input type="text" id="device_name" readonly placeholder="device not chosen" value=""/>
+        <hr/>
+        <span>service_uuid</span><input type="text" id="service_uuid" size="50"/>
+        <br/>
+        <span>tx_characteristics</span><input type="text" id="tx_characteristics" size="50"/>
+        <br/>
+        <span>rx_characteristics</span><input type="text" id="rx_characteristics" size="50"/>
+        <hr/>
+        <textarea id="message" " readonly rows="20" cols="80"></textarea>
+        <hr/>
+        <input type="text" id="message_to_send" placeholder="message to send" size="80"/>
+        <button onclick="send_to_device()">send</button>
+    </body>
+</html>

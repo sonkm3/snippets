@@ -21,7 +21,17 @@
 - Arduino IDEから実行
 
 ### Arduino CLI
-- Arduino CLIから実行
+#### coreのインストール
+```bash
+$ arduino-cli core install m5stack:esp32
+```
+
+#### ライブラリのインストール
+```bash
+$ arduino-cli lib install M5StickC
+```
+
+#### アップロード
 ```bash
 $ arduino-cli board list
 Port                            Protocol Type              Board Name FQBN Core

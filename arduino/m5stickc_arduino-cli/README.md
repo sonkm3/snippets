@@ -26,11 +26,6 @@
 $ arduino-cli core install m5stack:esp32
 ```
 
-#### ライブラリのインストール
-```bash
-$ arduino-cli lib install M5StickC
-```
-
 #### アップロード
 ```bash
 $ arduino-cli board list
@@ -39,4 +34,19 @@ Port                            Protocol Type              Board Name FQBN Core
 
 $ arduino-cli compile
 $ arduino-cli upload -p /dev/cu.usbserial-xxxxx
+```
+
+#### make
+##### boardをattach
+```bash
+$ arduino-cli board attach -p /dev/cu.usbserial-xxxxx
+```
+
+##### make
+```bash
+$ make
+```
+
+```bash
+$ make monitor
 ```

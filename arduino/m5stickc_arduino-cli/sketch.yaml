@@ -1,5 +1,5 @@
 profiles:
-  m5stack_atom:
+  m5stack_stickc:
     fqbn: m5stack:esp32:m5stack_stickc
     platforms:
       - platform: m5stack:esp32 (3.2.2)

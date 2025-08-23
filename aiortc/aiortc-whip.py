@@ -1,5 +1,6 @@
 
 import asyncio
+import platform
 
 import aiohttp
 from aiortc import RTCConfiguration, RTCIceServer, RTCPeerConnection, RTCSessionDescription
@@ -13,7 +14,13 @@ ice_server_list = [RTCIceServer('stun:stun.l.google.com:19302'),]
 # todo OSごとの対応はここで切り分ける
 def get_tracks():
     options: dict = {'framerate': '30', 'video_size': '640x480'}
-    webcam: MediaPlayer = MediaPlayer('default:none', format='avfoundation', options=options)
+    match platform.system():
+        case "Darwin":
+            webcam: MediaPlayer = MediaPlayer('default:none', format='avfoundation', options=options)
+        case "Linux":
+            webcam = MediaPlayer("/dev/video0", format="v4l2", options=options)
+        case "Windows":
+            webcam: MediaPlayer = MediaPlayer("video=Integrated Camera", format="dshow", options=options)
     return webcam
 
 async def send_offer(pc: RTCPeerConnection, url: str):

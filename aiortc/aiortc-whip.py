@@ -9,18 +9,18 @@ from aiortc.contrib.media import MediaPlayer
 
 whip_server_url: str = 'http://localhost:8080/whip'
 ice_server_list = [RTCIceServer('stun:stun.l.google.com:19302'),]
+# ice_server_list = [RTCIceServer('stun:stun.l.google.com:19302'),RTCIceServer('stun:stun.cloudflare.com:19302'),]
 
 
-# todo OSごとの対応はここで切り分ける
 def get_tracks():
-    options: dict = {'framerate': '30', 'video_size': '640x480'}
+    video_options: dict = {'framerate': '30', 'video_size': '640x480'}
     match platform.system():
         case "Darwin":
-            webcam: MediaPlayer = MediaPlayer('default:none', format='avfoundation', options=options)
+            webcam: MediaPlayer = MediaPlayer('default:default', format='avfoundation', options=video_options)
         case "Linux":
-            webcam = MediaPlayer("/dev/video0", format="v4l2", options=options)
+            webcam: MediaPlayer = MediaPlayer("/dev/video0", format="v4l2", options=video_options)
         case "Windows":
-            webcam: MediaPlayer = MediaPlayer("video=Integrated Camera", format="dshow", options=options)
+            webcam: MediaPlayer = MediaPlayer("video=Integrated Camera", format="dshow", options=video_options)
     return webcam
 
 async def send_offer(pc: RTCPeerConnection, url: str):
@@ -47,6 +47,7 @@ async def create_peer_connection():
     pc: RTCPeerConnection = RTCPeerConnection(RTCConfiguration(ice_server_list))
     webcam = get_tracks()
     pc.addTransceiver(webcam.video, direction='sendonly')
+    pc.addTransceiver(webcam.audio, direction='sendonly')
 
     offer = await pc.createOffer()
     await pc.setLocalDescription(offer)

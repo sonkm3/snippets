@@ -17,11 +17,14 @@ def get_tracks():
     match platform.system():
         case "Darwin":
             webcam: MediaPlayer = MediaPlayer('default:default', format='avfoundation', options=video_options)
+            audio = None
         case "Linux":
-            webcam: MediaPlayer = MediaPlayer("/dev/video0", format="v4l2", options=video_options)
+            webcam: MediaPlayer = MediaPlayer('/dev/video0', format='v4l2', options=video_options)
+            audio: MediaPlayer = MediaPlayer('default', format='pulse')
         case "Windows":
-            webcam: MediaPlayer = MediaPlayer("video=Integrated Camera", format="dshow", options=video_options)
-    return webcam
+            webcam: MediaPlayer = MediaPlayer('video=Integrated Camera', format='dshow', options=video_options)
+            audio = None
+    return webcam, audio
 
 async def send_offer(pc: RTCPeerConnection, url: str):
     headers: dict = {'Content-Type': 'application/sdp'}
@@ -45,9 +48,15 @@ async def apply_answer(pc: RTCPeerConnection, remote_sdp: str):
 
 async def create_peer_connection():
     pc: RTCPeerConnection = RTCPeerConnection(RTCConfiguration(ice_server_list))
-    webcam = get_tracks()
+    webcam, audio = get_tracks()
     pc.addTransceiver(webcam.video, direction='sendonly')
-    pc.addTransceiver(webcam.audio, direction='sendonly')
+    if audio is not None:
+        pc.addTransceiver(audio.audio, direction='sendonly')
+    else:
+        try:
+            pc.addTransceiver(webcam.audio, direction='sendonly')
+        except:
+            pass
 
     offer = await pc.createOffer()
     await pc.setLocalDescription(offer)

@@ -1,6 +1,7 @@
 
 import asyncio
 import platform
+from typing import Optional, Tuple
 
 import aiohttp
 from aiortc import RTCConfiguration, RTCIceServer, RTCPeerConnection, RTCSessionDescription
@@ -12,7 +13,7 @@ ICE_SERVER_LIST = [RTCIceServer('stun:stun.l.google.com:19302'),]
 # ICE_SERVER_LIST = [RTCIceServer('stun:stun.l.google.com:19302'),RTCIceServer('stun:stun.cloudflare.com:19302'),]
 
 
-def get_tracks():
+def get_tracks() -> Tuple[MediaPlayer, Optional[MediaPlayer]]:
     video_options: dict = {'framerate': '30', 'video_size': '640x480'}
     match platform.system():
         case "Darwin":
@@ -48,6 +49,9 @@ async def apply_answer(pc: RTCPeerConnection, remote_sdp: str):
 
 async def create_peer_connection():
     pc: RTCPeerConnection = RTCPeerConnection(RTCConfiguration(ICE_SERVER_LIST))
+
+    webcam: MediaPlayer
+    audio: Optional[MediaPlayer]
     webcam, audio = get_tracks()
 
     pc.addTransceiver(webcam.video, direction='sendonly')

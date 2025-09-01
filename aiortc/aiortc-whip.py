@@ -7,9 +7,9 @@ from aiortc import RTCConfiguration, RTCIceServer, RTCPeerConnection, RTCSession
 from aiortc.contrib.media import MediaPlayer
 
 
-whip_server_url: str = 'http://localhost:8080/whip'
-ice_server_list = [RTCIceServer('stun:stun.l.google.com:19302'),]
-# ice_server_list = [RTCIceServer('stun:stun.l.google.com:19302'),RTCIceServer('stun:stun.cloudflare.com:19302'),]
+WHIP_SERVER_URL: str = 'http://localhost:8080/whip'
+ICE_SERVER_LIST = [RTCIceServer('stun:stun.l.google.com:19302'),]
+# ICE_SERVER_LIST = [RTCIceServer('stun:stun.l.google.com:19302'),RTCIceServer('stun:stun.cloudflare.com:19302'),]
 
 
 def get_tracks():
@@ -26,7 +26,7 @@ def get_tracks():
             audio = None
     return webcam, audio
 
-async def send_offer(pc: RTCPeerConnection, url: str):
+async def send_offer(pc: RTCPeerConnection, url: str) -> str:
     headers: dict = {'Content-Type': 'application/sdp'}
     local_sdp = pc.localDescription.sdp
 
@@ -47,21 +47,24 @@ async def apply_answer(pc: RTCPeerConnection, remote_sdp: str):
         return
 
 async def create_peer_connection():
-    pc: RTCPeerConnection = RTCPeerConnection(RTCConfiguration(ice_server_list))
+    pc: RTCPeerConnection = RTCPeerConnection(RTCConfiguration(ICE_SERVER_LIST))
     webcam, audio = get_tracks()
+
     pc.addTransceiver(webcam.video, direction='sendonly')
+
     if audio is not None:
-        pc.addTransceiver(audio.audio, direction='sendonly')
+        print('use audio')
+        pc.addTrack(audio.audio)
     else:
         try:
-            pc.addTransceiver(webcam.audio, direction='sendonly')
+            pc.addTrack(webcam.audio)
         except:
             pass
 
-    offer = await pc.createOffer()
+    offer: RTCSessionDescription = await pc.createOffer()
     await pc.setLocalDescription(offer)
 
-    remote_sdp = await send_offer(pc, whip_server_url)
+    remote_sdp: str = await send_offer(pc, WHIP_SERVER_URL)
     if not remote_sdp:
         return
     await apply_answer(pc, remote_sdp)
@@ -74,7 +77,7 @@ async def on_shutdown():
     pass
     # await pc.close()
     async with aiohttp.ClientSession() as session:
-        response = await session.delete(whip_server_url)
+        response = await session.delete(WHIP_SERVER_URL)
         print(f'DELETE request done with status: {response.status}')
 
 async def create_whip_connection():

@@ -29,7 +29,9 @@ async def call_api(method: str, base_url: str, path: Optional[str] = '', headers
         url:str = base_url
 
     response: Optional[ClientResponse] = None
-    async with aiohttp.ClientSession() as session:
+    timeout = aiohttp.ClientTimeout()
+
+    async with aiohttp.ClientSession(timeout=timeout) as session:
         try:
             async with session.request(method, url, data=data, headers=headers) as resp:
                 if not resp.ok:
@@ -139,6 +141,7 @@ def run():
     finally:
         on_shutdown_task: Future = on_shutdown(pc)
         loop.run_until_complete(on_shutdown_task)
+        loop.stop()
 
 if __name__ == '__main__':
     run()

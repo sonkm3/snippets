@@ -1,5 +1,6 @@
 
 import asyncio
+from asyncio import Future
 import platform
 from typing import Optional, Tuple
 from urllib.parse import urljoin
@@ -105,32 +106,27 @@ async def on_shutdown(pc: RTCPeerConnection) -> None:
     if pc:
         await pc.close()
 
-
 async def create_whip_connection() -> Optional[RTCPeerConnection]:
     pc = await create_peer_connection()
     return pc
 
-async def run():
-    # try:
-    #     aiortc_main_task = asyncio.create_task(aiortc_whip_main())
-    # except Exception as e:
-    #     print(e)
-    #     aiortc_main_task.cancel()
-    #     await aiortc_main_task
+def run():
+    pc: Optional[RTCPeerConnection] = None
 
-    pc = None
-    try:
-        pc = await create_whip_connection()
-    except Exception as e:
-        print(f'Exception: {e}')
-        await on_shutdown(pc)
+    create_whip_connection_task: Future = create_whip_connection()
+
+    loop = asyncio.get_event_loop()
 
     try:
-        await asyncio.Event().wait()
+        pc: Optional[RTCPeerConnection] = loop.run_until_complete(create_whip_connection_task)
+        loop.run_forever()
+    except KeyboardInterrupt as e:
+        print('KeyboardInterrupt')
     except Exception as e:
-        print(f'Exception: {e}')
+        print(e)
     finally:
-        await on_shutdown(pc)
+        on_shutdown_task: Future = on_shutdown(pc)
+        loop.run_until_complete(on_shutdown_task)
 
 if __name__ == '__main__':
-    asyncio.run(run())
+    run()

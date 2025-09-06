@@ -1,4 +1,3 @@
-
 import asyncio
 from asyncio import Future
 import logging
@@ -22,11 +21,11 @@ ICE_SERVER_LIST = [RTCIceServer('stun:stun.l.google.com:19302'),]
 
 async def call_api(method: str, base_url: str, path: Optional[str] = '', headers: Optional[dict] = None, data: Optional[dict] = None) -> Optional[ClientResponse]:
     if path and not base_url.endswith('/'):
-        url:str = urljoin(base_url + '/', path)
+        url: str = urljoin(base_url + '/', path)
     elif path:
-        url:str = urljoin(base_url, path)
+        url: str = urljoin(base_url, path)
     else:
-        url:str = base_url
+        url: str = base_url
 
     response: Optional[ClientResponse] = None
     timeout = aiohttp.ClientTimeout()
@@ -45,19 +44,21 @@ async def call_api(method: str, base_url: str, path: Optional[str] = '', headers
 
     return response
 
+
 def get_tracks() -> Tuple[MediaPlayer, Optional[MediaPlayer]]:
     video_options: dict = {'framerate': '30', 'video_size': '640x480'}
     match platform.system():
-        case "Darwin":
+        case 'Darwin':
             webcam: MediaPlayer = MediaPlayer('default:default', format='avfoundation', options=video_options)
             audio = None
-        case "Linux":
+        case 'Linux':
             webcam: MediaPlayer = MediaPlayer('/dev/video0', format='v4l2', options=video_options)
             audio: MediaPlayer = MediaPlayer('default', format='pulse')
-        case "Windows":
+        case 'Windows':
             webcam: MediaPlayer = MediaPlayer('video=Integrated Camera', format='dshow', options=video_options)
             audio = None
     return webcam, audio
+
 
 async def send_offer(local_sdp: str, url: str) -> Optional[str]:
     headers: dict = {'Content-Type': 'application/sdp'}
@@ -69,9 +70,11 @@ async def send_offer(local_sdp: str, url: str) -> Optional[str]:
 
     return await response.text()
 
+
 async def apply_answer(pc: RTCPeerConnection, remote_sdp: str) -> None:
-        await pc.setRemoteDescription(RTCSessionDescription(sdp=remote_sdp, type='answer'))
-        return
+    await pc.setRemoteDescription(RTCSessionDescription(sdp=remote_sdp, type='answer'))
+    return
+
 
 async def create_peer_connection() -> Optional[RTCPeerConnection]:
     pc: RTCPeerConnection = RTCPeerConnection(RTCConfiguration(ICE_SERVER_LIST))
@@ -89,7 +92,8 @@ async def create_peer_connection() -> Optional[RTCPeerConnection]:
         try:
             pc.addTrack(webcam.audio)
             logging.info('use webcam audio')
-        except:
+        except Exception as e:
+            logging.error(e)
             pass
 
     offer: RTCSessionDescription = await pc.createOffer()
@@ -104,6 +108,7 @@ async def create_peer_connection() -> Optional[RTCPeerConnection]:
     await apply_answer(pc, remote_sdp)
 
     return pc
+
 
 # pionのwhip-whep exampleはDELETEに対応していないので使わない
 async def on_shutdown(pc: RTCPeerConnection) -> None:
@@ -121,9 +126,11 @@ async def on_shutdown(pc: RTCPeerConnection) -> None:
         except Exception as e:
             logging.error(e)
 
+
 async def create_whip_connection() -> Optional[RTCPeerConnection]:
     pc = await create_peer_connection()
     return pc
+
 
 def run():
     pc: Optional[RTCPeerConnection] = None
@@ -134,7 +141,7 @@ def run():
     try:
         pc: Optional[RTCPeerConnection] = loop.run_until_complete(create_whip_connection_task)
         loop.run_forever()
-    except KeyboardInterrupt as e:
+    except KeyboardInterrupt:
         logging.error('KeyboardInterrupt')
     except Exception as e:
         logging.error(e)
@@ -142,6 +149,7 @@ def run():
         on_shutdown_task: Future = on_shutdown(pc)
         loop.run_until_complete(on_shutdown_task)
         loop.stop()
+
 
 if __name__ == '__main__':
     run()

@@ -121,10 +121,7 @@ async def on_shutdown(pc: RTCPeerConnection) -> None:
         logging.error(e)
 
     if pc:
-        try:
-            await pc.close()
-        except Exception as e:
-            logging.error(e)
+        await pc.close()
 
 
 async def create_whip_connection() -> Optional[RTCPeerConnection]:
@@ -132,6 +129,7 @@ async def create_whip_connection() -> Optional[RTCPeerConnection]:
     return pc
 
 
+# todo:  update not to use asyncio low level loop API
 def run():
     pc: Optional[RTCPeerConnection] = None
 

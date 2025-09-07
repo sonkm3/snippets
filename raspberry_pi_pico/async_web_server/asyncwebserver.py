@@ -1,7 +1,5 @@
 import asyncio
 
-from typing import Optional, Tuple
-
 
 class WebServer:
     def __init__(self, host='0.0.0.0', port=80, handlers={}) -> None:
@@ -36,18 +34,18 @@ class WebServer:
             path_with_query = path_with_query_and_fragment
         return path_with_query
 
-    def parse_request_path(self, path_with_query: str) -> Tuple[str, dict]:
+    def parse_request_path(self, path_with_query: str):
         query_dict = {}
         if '?' in path_with_query:
             path, query_string = path_with_query.split('?', 1)
             for query_pair in query_string.split('&'):
                 key, value = query_pair.split('=', 1)
                 query_dict.update({key: value})
-            else:
-                path = path_with_query
+        else:
+            path = path_with_query
         return path, query_dict
 
-    async def read_header(self, request):
+    async def read_header(self, request) -> list:
         header_list = []
         while True:
             header_line = await self.read_request(request)
@@ -78,5 +76,16 @@ class WebServer:
         response_io.close()
         await response_io.wait_closed()
 
+        request_io.close()
+        await request_io.wait_closed()
+
     async def serve(self):
         await asyncio.start_server(self.dispatch, self.host, self.port)
+
+async def run_forever(web_server):
+        asyncio.create_task(web_server.serve())
+        while True:
+            await asyncio.sleep(0)
+
+def run_webserver(web_server):
+    asyncio.run(run_forever(web_server))

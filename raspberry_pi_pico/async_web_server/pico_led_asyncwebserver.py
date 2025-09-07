@@ -1,10 +1,9 @@
-import uasyncio as asyncio
 import machine
 import network
 import rp2
 import time
 
-from asyncwebserver import WebServer
+from asyncwebserver import run_webserver, WebServer
 
 
 WIFI_COUNTRY = ''
@@ -49,10 +48,8 @@ def main() -> None:
     handlers = setup_handlers()
 
     web_server = WebServer(host='0.0.0.0', port=2080, handlers=handlers)
+    run_webserver(web_server)
 
-    loop = asyncio.new_event_loop()
-    loop.create_task(web_server.serve())
-    loop.run_forever()
 
 if __name__ == '__main__':
     main()

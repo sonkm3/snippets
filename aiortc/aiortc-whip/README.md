@@ -21,6 +21,7 @@
         - not sure this FFmpeg7 supports hardware encoder on Raspberry pi
 	- update to trixie
 		- `https://gist.github.com/jauderho/5f73f16cac28669e56608be14c41006c`
+        - `https://gist.github.com/jauderho/5f73f16cac28669e56608be14c41006c`
 	  - after updating raspberry pi os to debian trixie, FFmpeg got to be 7
         ```
         $ ffmpeg --version

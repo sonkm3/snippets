@@ -1,6 +1,7 @@
 import asyncio
 from asyncio import Future
 from dataclasses import dataclass
+import fractions
 import functools
 import json
 import logging
@@ -12,8 +13,11 @@ import aiohttp
 from aiohttp.client import ClientResponse
 from aiohttp import web
 from aiortc import RTCConfiguration, RTCIceServer, RTCPeerConnection, RTCSessionDescription
-from aiortc.mediastreams import MediaStreamTrack
+from aiortc.mediastreams import AudioStreamTrack, MediaStreamTrack, VideoStreamTrack
 from aiortc.contrib.media import MediaPlayer, MediaRelay
+from av import VideoFrame
+from PIL import Image, ImageDraw, ImageFont
+
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -23,6 +27,38 @@ ICE_SERVER_LIST = [RTCIceServer('stun:stun.l.google.com:19302'),]
 
 
 room_dict = {}
+
+
+class DefaultStreamTrack(VideoStreamTrack):
+    def __init__(self):
+        super().__init__()
+        height, width = 480, 640
+
+        self.canvas = Image.new("RGB", (width, height), color='white')
+        draw = ImageDraw.Draw(self.canvas)
+
+    def _get_image(self, time_base: fractions.Fraction):
+        return self.canvas
+
+    async def recv(self):
+        pts, time_base = await self.next_timestamp()
+
+        frame = VideoFrame.from_image(self._get_image(time_base))
+        frame.pts = pts
+        frame.time_base = time_base
+        self.counter += 1
+        return frame
+
+
+def get_default_track() -> MediaStreamTrack:
+    # default_audio_track: Optional[AudioStreamTrack]
+    default_video_track: Optional[VideoStreamTrack]
+
+    def _get_default_track() -> MediaStreamTrack:
+        # default_audio_track = locals().get('default_audio_track', FlagVideoStreamTrack())
+        default_video_track = locals().get('default_video_track', FlagVideoStreamTrack())
+    return _get_default_track
+
 
 @dataclass
 class Relay:
@@ -48,10 +84,16 @@ class BroadCaster(Perticipent):
 
 
 class Room:
-    def __init__(self, room_id: int):
+    def __init__(self, room_id: int, dummy_video_track: VideoStreamTrack):
         self.room_id = room_id
         self.broadcaster_list: BroadCaster = []
         self.viewer_list: Viewer = []
+        self.relay_list: MediaRelay = []
+
+        self.dummy_video_track: VideoStreamTrack = dummy_video_track
+
+        self.default_video_relay: MediaRelay = MediaRelay()
+        self.default_video_relay.subscribe(self.dummy_video_track)
 
     def broadcaster_join(self, new_broadcaster: BroadCaster):
         self.broadcaster_list.append(new_broadcaster)
@@ -67,11 +109,13 @@ class Room:
     def viewer_leave(self, leaving_viewer: BroadCaster):
         self.viewer_list = [viewer for viewer in self.viewer_list if viewer != leaving_viewer]
 
-    def track_(self, track: MediaStreamTrack):
+    def track_start(self, track: MediaStreamTrack):
         relay: MediaRelay = MediaRelay()
         relay.subscribe(track)
         self.relay_list.append(Relay(track_id=track.id, relay=relay))
- 
+
+    def get_default_video_track(self) -> VideoStreamTrack:
+        return self.default_video_relay
 
 def handle_root(request: web.Request) -> web.StreamResponse:
     return web.Response(text='hello')
@@ -102,7 +146,7 @@ class WhipView(web.View):
         if self.request.headers.get('Content-Type') != 'application/sdp':
             raise
 
-        room: Room = room_dict.get(room_id, Room(room_id))
+        room: Room = room_dict.get(room_id, Room(room_id, get_default_track()))
 
         remote_sdp = data
 
@@ -128,13 +172,39 @@ class WhipView(web.View):
             dumps=functools.partial(json.dumps, indent=4),
         )
 
+class WhepView(web.View):
+    async def post(self) -> web.StreamResponse:
+        pc: RTCPeerConnection = RTCPeerConnection(RTCConfiguration(ICE_SERVER_LIST))
+        viewer: Viewer
+
+        room_id = self.request.match_info.get('room_id')
+        data = await self.request.post()
+
+        if self.request.headers.get('Content-Type') != 'application/sdp':
+            raise
+
+        room: Room = room_dict.get(room_id, Room(room_id, get_default_track()))
+
+        remote_sdp = data
+
+        pc.addTransceiver(room.get_default_video_track(), direction='sendonly')
+
+        await pc.setRemoteDescription(RTCSessionDescription(sdp=remote_sdp, type='answer'))
+        answer = await pc.createAnswer()
+
+        viewer = Viewer(pc)
+        room.viewer_join(viewer)
+
+        return web.Response(body=answer, content_type='application/sdp')
+
 
 app = web.Application()
+
 app.add_routes([
     web.get('/', handle_root),
     web.post(r'/whip/{room_id:\d+}', WhipView),
     web.delete(r'/whip/{room_id:\d+}', WhipView),
-    # web.post(r'/whep/{room_id:\d+}', handle_whep)
+    web.post(r'/whep/{room_id:\d+}', WhepView)
     ])
 
 if __name__ == '__main__':

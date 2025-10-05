@@ -1,21 +1,16 @@
-import asyncio
-from asyncio import Future
 from dataclasses import dataclass
 import fractions
 import functools
 import json
 import logging
-import platform
 from typing import Optional, Tuple
-from urllib.parse import urljoin
 
-import aiohttp
-from aiohttp.client import ClientResponse
+
 from aiohttp import web
 from aiortc import RTCConfiguration, RTCIceServer, RTCPeerConnection, RTCSessionDescription
 from aiortc.mediastreams import AudioStreamTrack, MediaStreamTrack, VideoStreamTrack
 from aiortc.contrib.media import MediaPlayer, MediaRelay
-from av import VideoFrame
+from av import AudioFrame, VideoFrame
 from PIL import Image, ImageDraw, ImageFont
 
 
@@ -29,92 +24,138 @@ ICE_SERVER_LIST = [RTCIceServer('stun:stun.l.google.com:19302'),]
 room_dict = {}
 
 
-class DefaultStreamTrack(VideoStreamTrack):
+class DummyVideoStreamTrack(VideoStreamTrack):
     def __init__(self):
         super().__init__()
         height, width = 480, 640
 
         self.canvas = Image.new("RGB", (width, height), color='white')
         draw = ImageDraw.Draw(self.canvas)
+        # todo  draw some texts
 
     def _get_image(self, time_base: fractions.Fraction):
         return self.canvas
+        # return self.canvases[time_base % 30]
+
+    def _get_video_frame(self, time_base):
+        return VideoFrame.from_image(self._get_image(time_base))
 
     async def recv(self):
         pts, time_base = await self.next_timestamp()
 
-        frame = VideoFrame.from_image(self._get_image(time_base))
+        frame: VideoFrame = self._get_video_frame(time_base)
+
+        frame.pts = pts
+        frame.time_base = time_base
+        self.counter += 1
+        return frame
+
+# create silent audio track
+# how to create silent audiotrack without numpy
+# https://github.com/PyAV-Org/PyAV/issues/523#issuecomment-492186517
+# how to create silent audiotrack with numpy
+# https://github.com/PyAV-Org/PyAV/issues/523#issuecomment-1301823518
+class DummyAudioStreamTrack(AudioStreamTrack):
+    def __init__(self):
+        super().__init__()
+        self.frame = AudioFrame(samples=1152)
+        self.frame.pts = None
+        self.frame.rate = 48000
+
+    def _get_audio_frame(self):
+        return self.frame
+
+    async def recv(self):
+        pts, time_base = await self.next_timestamp()
+
+        frame: AudioFrame = self._get_audio_frame()
+
         frame.pts = pts
         frame.time_base = time_base
         self.counter += 1
         return frame
 
 
-def get_default_track() -> MediaStreamTrack:
-    # default_audio_track: Optional[AudioStreamTrack]
-    default_video_track: Optional[VideoStreamTrack]
+def get_dummy_track() -> MediaStreamTrack:
+    dummy_audio_track: Optional[AudioStreamTrack]
+    dummy_video_track: Optional[VideoStreamTrack]
 
-    def _get_default_track() -> MediaStreamTrack:
-        # default_audio_track = locals().get('default_audio_track', FlagVideoStreamTrack())
-        default_video_track = locals().get('default_video_track', FlagVideoStreamTrack())
-    return _get_default_track
+    def _get_dummy_track() -> MediaStreamTrack:
+        dummy_audio_track = locals().get('dummy_audio_track', DummyAudioStreamTrack())
+        dummy_video_track = locals().get('dummy_video_track', DummyVideoStreamTrack())
+        return dummy_audio_track, dummy_video_track
+    return _get_dummy_track
 
 
-@dataclass
-class Relay:
-    track_id: str
-    relay: MediaRelay
-
-# dataclass?
 class Perticipent:
     pc: RTCPeerConnection
     def __init__(self, pc: RTCPeerConnection):
         self.pc = pc
 
-# dataclass?
+
 class Viewer(Perticipent):
     pass
 
-# dataclass?
+
 class BroadCaster(Perticipent):
-    relay_dict: dict[MediaRelay]
-    def __init__(self, pc:RTCPeerConnection):
-        super().__init__()
-        self.relaydict = {}
+    pass
 
 
+# todo  MediaRelayはtrackの差し替えに対応していないのでtrack差し替えに対応したMediaRelayを継承して作る必要がある
+class Relay:
+    def __init__(self, audio_track: AudioStreamTrack, video_track: VideoStreamTrack, broadcaster: BroadCaster, viewer: Viewer):
+        self.audio_track_id: str = audio_track.id
+        self.video_track_id: str = video_track.id
+
+        self.audio_relay: MediaRelay = MediaRelay()
+        self.video_relay: MediaRelay = MediaRelay()
+        self.audio_relay.subscribe(audio_track)
+        self.video_relay.subscribe(video_track)
+
+        self.broadcaster: Optional[BroadCaster] = broadcaster
+        self.viewer: Optional[Viewer] = viewer
+
+# todo  add method to change MediaRelay's reference from dummy to broadcaster (or viceversa)
 class Room:
-    def __init__(self, room_id: int, dummy_video_track: VideoStreamTrack):
+    def __init__(self, room_id: int, dummy_audio_track: AudioStreamTrack, dummy_video_track: VideoStreamTrack):
         self.room_id = room_id
         self.broadcaster_list: BroadCaster = []
         self.viewer_list: Viewer = []
-        self.relay_list: MediaRelay = []
+        self.relay_list: MediaRelay = [] # todo  Relayクラスに変更
 
+        # we can use different dummy tracks for each Room
+        self.dummy_audio_track: VideoStreamTrack = dummy_audio_track
         self.dummy_video_track: VideoStreamTrack = dummy_video_track
-
-        self.default_video_relay: MediaRelay = MediaRelay()
-        self.default_video_relay.subscribe(self.dummy_video_track)
 
     def broadcaster_join(self, new_broadcaster: BroadCaster):
         self.broadcaster_list.append(new_broadcaster)
 
     def viewer_join(self, new_viewer: Viewer):
         self.viewer_list.append(new_viewer)
-        # subscribe?
+
+        # if broadcaster exists, broadcaster will be themselves(subscrive existing stream)
+        broadcaster = None
+
+        relay = Relay(self.dummy_audio_track, self.dummy_video_track, broadcaster, new_viewer)
+        self.relay_list.append(relay)
 
     def broadcaster_leave(self, leaving_broadcaster: BroadCaster):
         self.broadcaster_list = [broadcaster for broadcaster in self.broadcaster_list if broadcaster != leaving_broadcaster]
         # notify to subscrivers?
+        # relay_listのソースをダミーからbroadcasterのtrackに切り替える
 
     def viewer_leave(self, leaving_viewer: BroadCaster):
         self.viewer_list = [viewer for viewer in self.viewer_list if viewer != leaving_viewer]
+        self.relay_list = [relay for relay in self.relay_list if relay.viewer != leaving_viewer]
 
     def track_start(self, track: MediaStreamTrack):
-        relay: MediaRelay = MediaRelay()
+        relay: MediaRelay = MediaRelay() # todo  Relayクラスの修正に対応する
         relay.subscribe(track)
         self.relay_list.append(Relay(track_id=track.id, relay=relay))
 
-    def get_default_video_track(self) -> VideoStreamTrack:
+    # MediaRelayの使い方間違ってるかも？(元の実装はViewerごとにRelayを用意していた気がするしそちらが正解では？)
+    # これいらんかも？
+    def get_default_video_relay(self) -> VideoStreamTrack:
         return self.default_video_relay
 
 def handle_root(request: web.Request) -> web.StreamResponse:
@@ -146,7 +187,7 @@ class WhipView(web.View):
         if self.request.headers.get('Content-Type') != 'application/sdp':
             raise
 
-        room: Room = room_dict.get(room_id, Room(room_id, get_default_track()))
+        room: Room = room_dict.get(room_id, Room(room_id, get_dummy_track()))
 
         remote_sdp = data
 
@@ -183,11 +224,11 @@ class WhepView(web.View):
         if self.request.headers.get('Content-Type') != 'application/sdp':
             raise
 
-        room: Room = room_dict.get(room_id, Room(room_id, get_default_track()))
+        room: Room = room_dict.get(room_id, Room(room_id, get_dummy_track()))
 
         remote_sdp = data
 
-        pc.addTransceiver(room.get_default_video_track(), direction='sendonly')
+        pc.addTransceiver(room.get_default_video_relay(), direction='sendonly')
 
         await pc.setRemoteDescription(RTCSessionDescription(sdp=remote_sdp, type='answer'))
         answer = await pc.createAnswer()

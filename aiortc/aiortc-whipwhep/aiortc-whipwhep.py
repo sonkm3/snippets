@@ -102,6 +102,8 @@ class BroadCaster(Perticipent):
 
 
 # todo  MediaRelayはtrackの差し替えに対応していないのでtrack差し替えに対応したMediaRelayを継承して作る必要がある
+# track差し替えできる実装かどうか疑問なので再度確認する
+
 class Relay:
     def __init__(self, audio_track: AudioStreamTrack, video_track: VideoStreamTrack, broadcaster: BroadCaster, viewer: Viewer):
         self.audio_track_id: str = audio_track.id
@@ -121,7 +123,7 @@ class Room:
         self.room_id = room_id
         self.broadcaster_list: BroadCaster = []
         self.viewer_list: Viewer = []
-        self.relay_list: MediaRelay = [] # todo  Relayクラスに変更
+        self.relay_list: MediaRelay = [] # todo  Relayクラスに変更 <- できてない
 
         # we can use different dummy tracks for each Room
         self.dummy_audio_track: VideoStreamTrack = dummy_audio_track
@@ -129,10 +131,12 @@ class Room:
 
     def broadcaster_join(self, new_broadcaster: BroadCaster):
         self.broadcaster_list.append(new_broadcaster)
+        # dummy_trackから配信者のRelayへの付け替え処理が入っていない
 
     def viewer_join(self, new_viewer: Viewer):
         self.viewer_list.append(new_viewer)
 
+        # ここは実装できてない
         # if broadcaster exists, broadcaster will be themselves(subscrive existing stream)
         broadcaster = None
 
@@ -167,6 +171,8 @@ class WhipView(web.View):
         pc: RTCPeerConnection = RTCPeerConnection(RTCConfiguration(ICE_SERVER_LIST))
         broadcaster: BroadCaster
 
+        # 以下のようにdecolatorではなくメソッドで関数オブジェクトを渡すとRTCPeerConnectionのインスタンス化を後回しにできる(HTTP APIとRTC処理は分けたほうが良いとして)
+        # ee.on('data', data_handler) <- pc.on('data', data_handler)
         @pc.on('track')
         def on_track(track):
             if track.kind == 'video':

@@ -121,6 +121,9 @@ async def on_shutdown(pc: RTCPeerConnection) -> None:
         logging.error(e)
 
     if pc:
+        # todo  need to stop video
+        # webcam.video.stop()
+        # https://github.com/aiortc/aiortc/pull/1328
         await pc.close()
 
 
